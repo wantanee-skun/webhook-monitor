@@ -8,16 +8,18 @@
     .event { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
     .hidden { display: none; }
     pre { background: #f5f5f5; padding: 10px; white-space: pre-wrap; word-break: break-word; }
-    button.toggle { margin-top: 5px; font-size: 0.9em; }
+    button.toggle { margin: 5px 5px 5px 0; font-size: 0.9em; }
   </style>
 </head>
 <body>
   <h1>📡 ebr-execute Webhook Monitor</h1>
   <button onclick="clearLogs()">🧹 Clear Logs</button>
+  <button onclick="toggleAll()">🔁 Toggle All</button>
   <div id="events"></div>
 
   <script>
     const logType = 'ebr-execute';
+    let allHidden = false;
 
     async function fetchLogs() {
       const res = await fetch(`/logs/${logType}`);
@@ -28,12 +30,15 @@
       data.reverse().forEach((event, index) => {
         const div = document.createElement('div');
         div.className = 'event';
-        const preId = `body-${index}`;
+        const bodyId = `body-${index}`;
+        const headersId = `headers-${index}`;
 
         div.innerHTML = `
-          <strong>${event.timestamp}</strong>
-          <button class="toggle" onclick="toggle('${preId}')">Toggle Body</button>
-          <pre id="${preId}" class="">${JSON.stringify(event.body, null, 2)}</pre>
+          <strong>${event.timestamp}</strong><br/>
+          <button class="toggle" onclick="toggle('${bodyId}')">Toggle Body</button>
+          <button class="toggle" onclick="toggle('${headersId}')">Toggle Headers</button>
+          <pre id="${bodyId}">${JSON.stringify(event.body, null, 2)}</pre>
+          <pre id="${headersId}" class="hidden">${JSON.stringify(event.headers, null, 2)}</pre>
         `;
 
         container.appendChild(div);
@@ -41,8 +46,19 @@
     }
 
     function toggle(id) {
-      const el = document.getElementById(id);
-      el.classList.toggle('hidden');
+      document.getElementById(id).classList.toggle('hidden');
+    }
+
+    function toggleAll() {
+      allHidden = !allHidden;
+      const allPre = document.querySelectorAll('pre');
+      allPre.forEach(el => {
+        if (allHidden) {
+          el.classList.add('hidden');
+        } else {
+          el.classList.remove('hidden');
+        }
+      });
     }
 
     async function clearLogs() {
@@ -55,4 +71,3 @@
   </script>
 </body>
 </html>
-
