@@ -36,9 +36,10 @@
   <div id="left-panel">
     <input type="text" id="search" placeholder="🔍 Search by keyword or batchId..." oninput="renderEventList()" />
     <div id="event-list"></div>
+    <button onclick="clearLogs()" style="margin-top: 10px; width: 100%;">🗑️ Clear Logs</button>
   </div>
   <div id="right-panel">
-    <h2>EBR Execute on SIT Test Company - Event Details</h2>
+    <h2>EBR Execute for SIT Test Company - Event Details</h2>
     <div>
       <button onclick="toggleAll()">🔁 Toggle All</button>
       <button onclick="clearSelection()">❌ Clear</button>
@@ -58,6 +59,16 @@
       const data = await res.json();
       allEvents = data.reverse();
       renderEventList();
+    }
+
+    async function clearLogs() {
+      const confirmed = confirm('Are you sure you want to clear all logs?');
+      if (!confirmed) return;
+      await fetch(`/logs/${logType}`, { method: 'DELETE' });
+      allEvents = [];
+      selectedEventIds = [];
+      renderEventList();
+      renderEventDetails();
     }
 
     function renderEventList() {

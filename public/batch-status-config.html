@@ -4,9 +4,19 @@
   <meta charset="UTF-8">
   <title>batch-status-config - Webhook Monitor</title>
   <style>
-    body { margin: 0; font-family: sans-serif; display: flex; height: 100vh; }
-    #left-panel { width: 30%; border-right: 1px solid #ccc; overflow-y: auto; padding: 10px; }
-    #right-panel { flex: 1; padding: 10px; overflow-y: auto; }
+    body { margin: 0; font-family: sans-serif; display: flex; height: 100vh; overflow: hidden; }
+    #left-panel {
+      width: 30%; min-width: 200px; max-width: 500px;
+      border-right: 1px solid #ccc;
+      overflow-y: auto; padding: 10px;
+      resize: horizontal; overflow: auto;
+    }
+    #right-panel {
+      flex: 1;
+      padding: 10px;
+      overflow-y: auto;
+      min-width: 0;
+    }
     .event-item { cursor: pointer; padding: 6px; margin: 4px 0; border: 1px solid #ddd; }
     .event-item:hover { background-color: #eef; }
     .selected { background-color: #ddf !important; }
@@ -14,6 +24,10 @@
     .hidden { display: none; }
     .label { font-weight: bold; margin-top: 10px; display: block; }
     .section { margin-bottom: 20px; }
+    .diff-container { display: flex; gap: 20px; flex-wrap: wrap; }
+    .diff-box { flex: 1 1 45%; background: #f9f9f9; border: 1px solid #ccc; padding: 10px; overflow-x: auto; }
+    .diff-add { background-color: #d4fcdc; }
+    .diff-remove { background-color: #fcd4d4; }
     button.toggle { margin: 5px 5px 5px 0; font-size: 0.9em; }
     input[type=text] { width: 100%; padding: 6px; margin-bottom: 10px; }
   </style>
@@ -22,9 +36,10 @@
   <div id="left-panel">
     <input type="text" id="search" placeholder="🔍 Search by keyword or batchId..." oninput="renderEventList()" />
     <div id="event-list"></div>
+    <button onclick="clearLogs()" style="margin-top: 10px; width: 100%;">🗑️ Clear Logs</button>
   </div>
   <div id="right-panel">
-    <h2>📦 Batch Status for SIT-Config Company - Event Details</h2>
+    <h2>Batch Status for SIT Config Company - Event Details</h2>
     <div>
       <button onclick="toggleAll()">🔁 Toggle All</button>
       <button onclick="clearSelection()">❌ Clear</button>
@@ -46,6 +61,16 @@
       renderEventList();
     }
 
+    async function clearLogs() {
+      const confirmed = confirm('Are you sure you want to clear all logs?');
+      if (!confirmed) return;
+      await fetch(`/logs/${logType}`, { method: 'DELETE' });
+      allEvents = [];
+      selectedEventIds = [];
+      renderEventList();
+      renderEventDetails();
+    }
+
     function renderEventList() {
       const keyword = document.getElementById('search').value.toLowerCase();
       const container = document.getElementById('event-list');
@@ -55,19 +80,19 @@
         const text = JSON.stringify(event.body).toLowerCase() + JSON.stringify(event.headers).toLowerCase();
         if (!text.includes(keyword)) return;
 
-        const id = `${event.timestamp}-${index}`;
+        const id = `${index}`;
         const div = document.createElement('div');
         div.className = 'event-item' + (selectedEventIds.includes(id) ? ' selected' : '');
         div.textContent = event.timestamp;
-        div.onclick = () => toggleSelect(id, event);
+        div.onclick = () => toggleSelect(id);
         container.appendChild(div);
       });
     }
 
-    function toggleSelect(id, event) {
-      const index = selectedEventIds.indexOf(id);
-      if (index >= 0) {
-        selectedEventIds.splice(index, 1);
+    function toggleSelect(id) {
+      const indexInSelection = selectedEventIds.indexOf(id);
+      if (indexInSelection >= 0) {
+        selectedEventIds.splice(indexInSelection, 1);
       } else {
         selectedEventIds.push(id);
       }
@@ -93,8 +118,8 @@
       container.innerHTML = '';
 
       selectedEventIds.forEach(id => {
-        const [timestamp] = id.split('-');
-        const event = allEvents.find(e => e.timestamp === timestamp);
+        const index = parseInt(id);
+        const event = allEvents[index];
         if (!event) return;
 
         const section = document.createElement('div');
@@ -103,38 +128,53 @@
           <h3>🕒 ${event.timestamp}</h3>
           <button class="toggle" onclick="document.getElementById('${id}-req-body').classList.toggle('hidden')">Toggle Request Body</button>
           <button class="toggle" onclick="document.getElementById('${id}-req-headers').classList.toggle('hidden')">Toggle Request Headers</button>
+          <button class="toggle" onclick="document.getElementById('${id}-res-body').classList.toggle('hidden')">Toggle Response Body</button>
+          <button class="toggle" onclick="document.getElementById('${id}-res-headers').classList.toggle('hidden')">Toggle Response Headers</button>
 
           <span class="label">Request Body:</span>
-          <pre id="${id}-req-body" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.body, null, 2)}</pre>
+          <pre id="${id}-req-body" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.body || {}, null, 2)}</pre>
 
           <span class="label">Request Headers:</span>
-          <pre id="${id}-req-headers" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.headers, null, 2)}</pre>
+          <pre id="${id}-req-headers" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.headers || {}, null, 2)}</pre>
+
+          <span class="label">Response Body:</span>
+          <pre id="${id}-res-body" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.responseBody || {}, null, 2)}</pre>
+
+          <span class="label">Response Headers:</span>
+          <pre id="${id}-res-headers" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.responseHeaders || {}, null, 2)}</pre>
         `;
         container.appendChild(section);
       });
     }
 
+    function diffJson(oldObj, newObj) {
+      const oldStr = JSON.stringify(oldObj, null, 2).split('\n');
+      const newStr = JSON.stringify(newObj, null, 2).split('\n');
+      const diffOld = oldStr.map((line, i) => newStr[i] !== line ? `<div class='diff-remove'>${line}</div>` : `<div>${line}</div>`).join('');
+      const diffNew = newStr.map((line, i) => oldStr[i] !== line ? `<div class='diff-add'>${line}</div>` : `<div>${line}</div>`).join('');
+      return { diffOld, diffNew };
+    }
+
     function compareSelected() {
-      if (selectedEventIds.length < 2) {
-        alert('Please select at least 2 events to compare.');
+      if (selectedEventIds.length !== 2) {
+        alert('Please select exactly 2 events to compare.');
         return;
       }
-      const compare = selectedEventIds.map(id => {
-        const [timestamp] = id.split('-');
-        return allEvents.find(e => e.timestamp === timestamp);
-      });
+      const [event1, event2] = selectedEventIds.map(id => allEvents[parseInt(id)]);
       const container = document.getElementById('event-details');
       container.innerHTML = '<h3>🔍 Compare View</h3>';
 
-      compare.forEach((event, i) => {
+      const sections = ['body', 'headers', 'responseBody', 'responseHeaders'];
+      sections.forEach(section => {
+        const diff = diffJson(event1[section] || {}, event2[section] || {});
         const div = document.createElement('div');
         div.className = 'section';
         div.innerHTML = `
-          <strong>Event ${i + 1} - ${event.timestamp}</strong>
-          <span class="label">Body:</span>
-          <pre>${JSON.stringify(event.body, null, 2)}</pre>
-          <span class="label">Headers:</span>
-          <pre>${JSON.stringify(event.headers, null, 2)}</pre>
+          <div class="label">${section}</div>
+          <div class="diff-container">
+            <div class="diff-box"><strong>Event 1</strong>${diff.diffOld}</div>
+            <div class="diff-box"><strong>Event 2</strong>${diff.diffNew}</div>
+          </div>
         `;
         container.appendChild(div);
       });
