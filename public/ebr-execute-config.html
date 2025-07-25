@@ -10,10 +10,13 @@
     pre { background: #f5f5f5; padding: 10px; white-space: pre-wrap; word-break: break-word; }
     button.toggle { margin: 5px 5px 5px 0; font-size: 0.9em; }
     .label { font-weight: bold; margin-top: 10px; display: block; }
+    #search { margin-bottom: 15px; padding: 5px; width: 250px; }
   </style>
 </head>
 <body>
   <h1>📡 ebr-execute-config Webhook Monitor</h1>
+  <input type="text" id="search" placeholder="🔍 Search by keyword or batchId..." oninput="filterLogs()" />
+  <br />
   <button onclick="clearLogs()">🧹 Clear Logs</button>
   <button onclick="toggleAll()">🔁 Toggle All</button>
   <div id="events"></div>
@@ -21,55 +24,92 @@
   <script>
     const logType = 'ebr-execute-config';
     let allHidden = true;
+    const openStates = {};
+    let allEvents = [];
 
-    async function fetchLogs() {
-      const res = await fetch(`/logs/${logType}`);
-      const data = await res.json();
+    function getEventId(event, index) {
+      return `${event.timestamp}-${index}`;
+    }
+
+    function toggleSection(eventId, type) {
+      openStates[eventId] = openStates[eventId] || { body: false, headers: false };
+      openStates[eventId][type] = !openStates[eventId][type];
+      updateVisibility(eventId);
+    }
+
+    function updateVisibility(eventId) {
+      const state = openStates[eventId];
+      if (!state) return;
+      const bodyEl = document.getElementById(`${eventId}-body`);
+      const headersEl = document.getElementById(`${eventId}-headers`);
+      if (bodyEl) bodyEl.classList.toggle('hidden', !state.body);
+      if (headersEl) headersEl.classList.toggle('hidden', !state.headers);
+    }
+
+    function renderLogs(events) {
       const container = document.getElementById('events');
       container.innerHTML = '';
 
-      data.reverse().forEach((event, index) => {
+      events.forEach((event, index) => {
+        const eventId = getEventId(event, index);
+        const isLatest = index === 0;
+        const state = openStates[eventId] || {
+          body: isLatest,       // default open for latest
+          headers: isLatest
+        };
+        openStates[eventId] = state;
+
         const div = document.createElement('div');
         div.className = 'event';
 
-        const bodyId = `body-${index}`;
-        const headersId = `headers-${index}`;
-
         div.innerHTML = `
           <strong>${event.timestamp}</strong><br/>
-          <button class="toggle" onclick="toggle('${bodyId}')">Toggle Body</button>
-          <button class="toggle" onclick="toggle('${headersId}')">Toggle Headers</button>
-          
+          <button class="toggle" onclick="toggleSection('${eventId}', 'body')">Toggle Body</button>
+          <button class="toggle" onclick="toggleSection('${eventId}', 'headers')">Toggle Headers</button>
+
           <span class="label">Body:</span>
-          <pre id="${bodyId}" class="hidden">${JSON.stringify(event.body, null, 2)}</pre>
-          
+          <pre id="${eventId}-body" class="${state.body ? '' : 'hidden'}">${JSON.stringify(event.body, null, 2)}</pre>
+
           <span class="label">Headers:</span>
-          <pre id="${headersId}" class="hidden">${JSON.stringify(event.headers, null, 2)}</pre>
+          <pre id="${eventId}-headers" class="${state.headers ? '' : 'hidden'}">${JSON.stringify(event.headers, null, 2)}</pre>
         `;
 
         container.appendChild(div);
       });
-    }
 
-    function toggle(id) {
-      document.getElementById(id).classList.toggle('hidden');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     function toggleAll() {
       allHidden = !allHidden;
-      const allPre = document.querySelectorAll('pre');
-      allPre.forEach(el => {
-        if (allHidden) {
-          el.classList.add('hidden');
-        } else {
-          el.classList.remove('hidden');
-        }
+      Object.keys(openStates).forEach(id => {
+        openStates[id].body = !allHidden;
+        openStates[id].headers = !allHidden;
       });
+      renderLogs(allEvents);
+    }
+
+    function filterLogs() {
+      const keyword = document.getElementById('search').value.toLowerCase();
+      const filtered = allEvents.filter(e =>
+        JSON.stringify(e.body).toLowerCase().includes(keyword) ||
+        JSON.stringify(e.headers).toLowerCase().includes(keyword)
+      );
+      renderLogs(filtered);
     }
 
     async function clearLogs() {
       await fetch(`/logs/${logType}`, { method: 'DELETE' });
-      fetchLogs();
+      allEvents = [];
+      Object.keys(openStates).forEach(key => delete openStates[key]);
+      renderLogs([]);
+    }
+
+    async function fetchLogs() {
+      const res = await fetch(`/logs/${logType}`);
+      const data = await res.json();
+      allEvents = data.reverse();
+      filterLogs(); // render filtered logs with open/collapse state
     }
 
     fetchLogs();
