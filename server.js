@@ -19,16 +19,21 @@ const logs = {
 Object.keys(logs).forEach((type) => {
   app.post(`/webhook/${type}`, (req, res) => {
     const timestamp = new Date().toISOString();
+    const response = { message: `${type} received`, timestamp };
+
     logs[type].push({
       timestamp,
       headers: req.headers,
-      body: req.body
+      body: req.body,
+      responseStatus: 200,
+      responseBody: response,
+      responseHeaders: { 'Content-Type': 'application/json' }
     });
 
     console.log(`📥 [${timestamp}] ${type} webhook received`);
     console.log(JSON.stringify(req.body, null, 2));
 
-    res.status(200).json({ message: `${type} received`, timestamp });
+    res.status(200).json(response);
   });
 
   // View logs for each webhook

@@ -17,7 +17,9 @@
       overflow-y: auto;
       min-width: 0;
     }
-    .event-item { cursor: pointer; padding: 6px; margin: 4px 0; border: 1px solid #ddd; }
+    .status-200 { color: green; font-weight: bold; }
+    .status-400, .status-500 { color: red; font-weight: bold; }
+    .status-default { color: gray; }
     .event-item:hover { background-color: #eef; }
     .selected { background-color: #ddf !important; }
     pre { background: #f5f5f5; padding: 10px; white-space: pre-wrap; word-break: break-word; }
@@ -39,7 +41,7 @@
     <button onclick="clearLogs()" style="margin-top: 10px; width: 100%;">🗑️ Clear Logs</button>
   </div>
   <div id="right-panel">
-    <h2>EBR Execute for SIT Test Company - Event Details</h2>
+    <h2>EBR Execute on SIT Test Company - Event Details</h2>
     <div>
       <button onclick="toggleAll()">🔁 Toggle All</button>
       <button onclick="clearSelection()">❌ Clear</button>
@@ -73,17 +75,22 @@
 
     function renderEventList() {
       const keyword = document.getElementById('search').value.toLowerCase();
+      const keywordHighlight = keyword.trim() ? new RegExp(`(${keyword})`, 'gi') : null;
       const container = document.getElementById('event-list');
       container.innerHTML = '';
 
       allEvents.forEach((event, index) => {
-        const text = JSON.stringify(event.body).toLowerCase() + JSON.stringify(event.headers).toLowerCase();
-        if (!text.includes(keyword)) return;
-
         const id = `${index}`;
         const div = document.createElement('div');
         div.className = 'event-item' + (selectedEventIds.includes(id) ? ' selected' : '');
-        div.textContent = event.timestamp;
+        const statusCode = event.status || event.responseStatus || '-';
+        const statusClass = `status-${statusCode}`;
+        const localTime = new Date(event.timestamp).toLocaleString();
+        let label = `${localTime} [${statusCode}]`;
+        if (keywordHighlight) {
+          label = label.replace(keywordHighlight, '<mark>$1</mark>');
+        }
+        div.innerHTML = `<span class='${statusClass}'>${label}</span>`;
         div.onclick = () => toggleSelect(id);
         container.appendChild(div);
       });
@@ -125,23 +132,30 @@
         const section = document.createElement('div');
         section.className = 'section';
         section.innerHTML = `
-          <h3>🕒 ${event.timestamp}</h3>
+          <h3>🕒 ${new Date(event.timestamp).toLocaleString()}</h3>
           <button class="toggle" onclick="document.getElementById('${id}-req-body').classList.toggle('hidden')">Toggle Request Body</button>
           <button class="toggle" onclick="document.getElementById('${id}-req-headers').classList.toggle('hidden')">Toggle Request Headers</button>
           <button class="toggle" onclick="document.getElementById('${id}-res-body').classList.toggle('hidden')">Toggle Response Body</button>
           <button class="toggle" onclick="document.getElementById('${id}-res-headers').classList.toggle('hidden')">Toggle Response Headers</button>
 
           <span class="label">Request Body:</span>
+          <button class='toggle' onclick="copyToClipboard('${id}-req-body')">📋 Copy</button>
           <pre id="${id}-req-body" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.body || {}, null, 2)}</pre>
 
           <span class="label">Request Headers:</span>
+          <button class='toggle' onclick="copyToClipboard('${id}-req-headers')">📋 Copy</button>
           <pre id="${id}-req-headers" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.headers || {}, null, 2)}</pre>
 
           <span class="label">Response Body:</span>
+          <button class='toggle' onclick="copyToClipboard('${id}-res-body')">📋 Copy</button>
           <pre id="${id}-res-body" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.responseBody || {}, null, 2)}</pre>
 
           <span class="label">Response Headers:</span>
+          <button class='toggle' onclick="copyToClipboard('${id}-res-headers')">📋 Copy</button>
           <pre id="${id}-res-headers" class="toggle-target ${allHidden ? 'hidden' : ''}">${JSON.stringify(event.responseHeaders || {}, null, 2)}</pre>
+
+          <span class="label">Response Status:</span>
+          <pre id="${id}-res-status" class="toggle-target ${allHidden ? 'hidden' : ''}">${event.status || event.responseStatus || 'Unknown'}</pre>
         `;
         container.appendChild(section);
       });
@@ -178,6 +192,13 @@
         `;
         container.appendChild(div);
       });
+    }
+
+    function copyToClipboard(id) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const text = el.innerText;
+      navigator.clipboard.writeText(text).then(() => alert('Copied!'));
     }
 
     fetchLogs();
