@@ -12,12 +12,12 @@
   </style>
 </head>
 <body>
-  <h1>📡 batch-status Webhook Monitor</h1>
+  <h1>📡 ebr-execute-config Webhook Monitor</h1>
   <button onclick="clearLogs()">🧹 Clear Logs</button>
   <div id="events"></div>
 
   <script>
-    const logType = 'batch-status';
+    const logType = 'ebr-execute-config';
 
     async function fetchLogs() {
       const res = await fetch(`/logs/${logType}`);
@@ -55,3 +55,4 @@
   </script>
 </body>
 </html>
+
